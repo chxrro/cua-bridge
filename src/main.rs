@@ -229,7 +229,7 @@ async fn handle_options() -> Response {
 
 async fn handle_health(State(bridge): State<Arc<Bridge>>) -> impl IntoResponse {
     let healthy = bridge.driver_healthy.load(Ordering::SeqCst);
-    let child_alive = bridge.child.lock().as_ref()
+    let child_alive = bridge.child.lock().as_mut()
         .map(|c| matches!(c.try_wait(), Ok(None)))
         .unwrap_or(false);
 
