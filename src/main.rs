@@ -298,15 +298,29 @@ async fn main() -> anyhow::Result<()> {
     let mut listener = None;
     for addr in &addrs {
         match TcpListener::bind(*addr).await {
-            Ok(l) => { tracing::info!("listening on http://{}", addr); listener = Some(l); break; }
-            Err(e) => { tracing::warn!("could not bind {}: {}", addr, e); }
+            Ok(l) => {
+                let msg = format!("listening on http://{}", addr);
+                tracing::info!("{}", msg);
+                listener = Some(l);
+                break;
+            }
+            Err(e) => {
+                let msg = format!("could not bind {}: {}", addr, e);
+                tracing::warn!("{}", msg);
+            }
         }
     }
     let listener = match listener {
         Some(l) => l,
-        None => anyhow::bail!("no bind address"),
+        None => {
+            let msg = String::from("no bind address");
+            anyhow::bail!(msg)
+        }
     };
-    tracing::info!("cua-bridge ready");
+    {
+        let msg = String::from("cua-bridge ready");
+        tracing::info!("{}", msg);
+    }
 
     let bs = bridge.clone();
     tokio::spawn(async move {
