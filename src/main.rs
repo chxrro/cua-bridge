@@ -302,7 +302,10 @@ async fn main() -> anyhow::Result<()> {
             Err(e) => { tracing::warn!("could not bind {}: {}", addr, e); }
         }
     }
-    let listener = listener.ok_or_else(|| anyhow::anyhow!("no bind address"))?;
+    let listener = match listener {
+        Some(l) => l,
+        None => anyhow::bail!("no bind address"),
+    };
     tracing::info!("cua-bridge ready");
 
     let bs = bridge.clone();
