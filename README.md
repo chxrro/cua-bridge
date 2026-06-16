@@ -2,7 +2,7 @@
 
 Native Rust MCP bridge for [cua-driver](https://github.com/trycua/cua). Replaces supergateway.
 
-**~200 lines, single binary, zero runtime dependencies.**
+**~190 lines, single binary, zero runtime dependencies.**
 
 ## Why
 
@@ -55,18 +55,6 @@ If you're on Tailscale and want the bridge reachable from other machines on your
 
 Omitting `--tailscale-ip` auto-detects it via `tailscale ip -4`.
 
-### Optional: activity indicator (glow socket)
-
-If you bundle cua-bridge inside a visual app, pass `--glow-socket` and it will write `"on"` / `"off"` to a Unix socket before/after each tool call. The app listens on the socket and renders an activity indicator:
-
-```bash
-./target/release/cua-bridge \
-  --cua-driver /path/to/cua-driver \
-  --glow-socket ~/.hermes/halo.sock
-```
-
-Without `--glow-socket`, no signalling occurs — the bridge is a pure MCP proxy.
-
 ### Flags
 
 | Flag | Default | Description |
@@ -74,7 +62,6 @@ Without `--glow-socket`, no signalling occurs — the bridge is a pure MCP proxy
 | `--cua-driver <path>` | `/Applications/CuaDriver.app/Contents/MacOS/cua-driver` | Path to cua-driver binary |
 | `--port <n>` | `8080` | HTTP listen port |
 | `--tailscale-ip <ip>` | auto-detect | Tailscale IP to bind (falls back to localhost only) |
-| `--glow-socket <path>` | none | Unix socket path for activity glow signalling |
 
 ## Integrations
 
@@ -89,10 +76,6 @@ mcp_servers:
 ```
 
 Then `/reload-mcp` to register the tools.
-
-### HermesBar (macOS)
-
-HermesBar bundles cua-bridge + cua-driver into a single `.app`. The glow socket is wired automatically — pass `--glow-socket ~/.hermes/halo.sock` and the menu bar app renders a screen-edge glow whenever a tool call is in flight.
 
 ## Known issues
 

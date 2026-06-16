@@ -12,7 +12,7 @@
 //!        → GET  /health
 //! ```
 //!
-//! SS E support on GET /mcp is the key feature that makes this work with
+//! SSE support on GET /mcp is the key feature that makes this work with
 //! Hermes Agent's native MCP client (streamableHttp transport).
 //!
 //! ## Quick start
@@ -23,11 +23,6 @@
 //!   --cua-driver /Applications/CuaDriver.app/Contents/MacOS/cua-driver \
 //!   --port 8080
 //! ```
-//!
-//! If you bundle this with a visual app (like HermesBar), pass
-//! `--glow-socket /path/to/socket` and cua-bridge will write "on"/"off"
-//! to that Unix socket before/after each tool call so the app can show
-//! an activity indicator.
 
 use axum::{
     extract::State,
@@ -43,8 +38,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
-use tokio::net::{TcpListener, UnixStream};
+use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
 struct Bridge {
@@ -52,11 +46,6 @@ struct Bridge {
     stdin: Mutex<Box<dyn Write + Send>>,
     stdout: Mutex<BufReader<Box<dyn Read + Send>>>,
     tx: broadcast::Sender<String>,
-    /// Optional Unix socket path for activity glow signalling.
-    /// When set, cua-bridge writes "on" before each tool call
-    /// and "off" after — the companion app listens on the socket
-    /// and renders a visual indicator. Left unset, no signalling occurs.
-    glow_socket: Option<String>,
 }
 
 fn read_mcp_msg(reader: &mut BufReader<impl Read>) -> anyhow::Result<String> {
@@ -94,21 +83,10 @@ async fn handle_get_mcp(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-/// Fire-and-forget glow signal over the configured Unix socket.
-async fn glow_signal(socket: &Option<String>, cmd: &str) {
-    let Some(path) = socket else { return };
-    if let Ok(mut stream) = UnixStream::connect(path).await {
-        let _ = stream.write_all(cmd.as_bytes()).await;
-    }
-}
-
 async fn handle_post_mcp(
     State(bridge): State<Arc<Bridge>>,
     body: String,
 ) -> Response {
-    // Signal activity — companion app shows a glow/indicator
-    let _ = tokio::spawn(glow_signal(&bridge.glow_socket.clone(), "on"));
-
     // Serialize cua-driver access
     let response = {
         let mut stdin = bridge.stdin.lock();
@@ -140,8 +118,6 @@ async fn handle_post_mcp(
             }
         }
     };
-
-    let _ = tokio::spawn(glow_signal(&bridge.glow_socket.clone(), "off"));
 
     (
         StatusCode::OK,
@@ -181,17 +157,15 @@ async fn main() -> anyhow::Result<()> {
         .to_string();
     let mut port: u16 = 8080;
     let mut extra_bind: Option<IpAddr> = None;
-    let mut glow_socket: Option<String> = None;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
             "--cua-driver" => { i += 1; cua_driver = args[i].clone(); }
             "--port" => { i += 1; port = args[i].parse()?; }
             "--tailscale-ip" => { i += 1; extra_bind = Some(args[i].parse()?); }
-            "--glow-socket" => { i += 1; glow_socket = Some(args[i].clone()); }
             other => {
                 eprintln!("Unknown flag: {}", other);
-                eprintln!("Usage: cua-bridge [--cua-driver <path>] [--port <n>] [--tailscale-ip <ip>] [--glow-socket <path>]");
+                eprintln!("Usage: cua-bridge [--cua-driver <path>] [--port <n>] [--tailscale-ip <ip>]");
                 std::process::exit(1);
             }
         }
@@ -222,7 +196,6 @@ async fn main() -> anyhow::Result<()> {
             Box::new(child_stdout) as Box<dyn Read + Send>
         )),
         tx,
-        glow_socket,
     });
 
     let app = Router::new()
