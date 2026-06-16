@@ -210,20 +210,21 @@ async fn main() -> anyhow::Result<()> {
     }
     addrs.push(SocketAddr::new(IpAddr::from([127, 0, 0, 1]), port));
 
-    let mut listener = None;
+    let mut listeners: Vec<TcpListener> = Vec::new();
     for addr in &addrs {
         match TcpListener::bind(*addr).await {
             Ok(l) => {
                 tracing::info!("listening on http://{}", addr);
-                listener = Some(l);
-                break;
+                listeners.push(l);
             }
             Err(e) => {
                 tracing::warn!("could not bind {}: {}", addr, e);
             }
         }
     }
-    let listener = listener.ok_or_else(|| anyhow::anyhow!("no bind address"))?;
+    if listeners.is_empty() {
+        anyhow::bail!("no bind address");
+    }
     tracing::info!("cua-bridge ready");
 
     let bs = bridge.clone();
@@ -235,6 +236,16 @@ async fn main() -> anyhow::Result<()> {
         std::process::exit(0);
     });
 
-    axum::serve(listener, app).await?;
+    // Serve on all bound addresses concurrently
+    let mut handles = Vec::with_capacity(listeners.len());
+    for listener in listeners {
+        let app = app.clone();
+        handles.push(tokio::spawn(async move {
+            axum::serve(listener, app).await
+        }));
+    }
+    for handle in handles {
+        let _ = handle.await;
+    }
     Ok(())
 }
